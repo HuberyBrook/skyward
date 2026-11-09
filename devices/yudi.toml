@@ -178,26 +178,39 @@ libraries = ["/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "
 user = "root"
 groups = ["root"]
 
+# 照抄 TWRP（YARP）真机验证过的定义，逐字对应：
+#   qseecomd        /vendor/etc/init/qseecomd.rc        root:root drmrpc
+#   qseecom-service /vendor/etc/init/vendor.qti...rc    system:system drmrpc
+#   keymint-qti     ...                                 system:system drmrpc
+#   gatekeeper-qti  ...                                 system:system
+# 顺序也是 TWRP 的：qseecomd（core）在 hal 之前。
+[[service]]
+path = "/vendor/bin/qseecomd"
+loader = "/system/bin/bootstrap/linker64"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
+user = "root"
+groups = ["root", "drmrpc"]
+
 [[service]]
 path = "/vendor/bin/hw/vendor.qti.hardware.qseecom@1.0-service"
 loader = "/system/bin/bootstrap/linker64"
 libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
-user = "root"
-groups = ["root"]
+user = "system"
+groups = ["system", "drmrpc"]
 
 [[service]]
 path = "/vendor/bin/hw/android.hardware.security.keymint-service-qti"
 loader = "/system/bin/bootstrap/linker64"
 libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
-user = "root"
-groups = ["root"]
+user = "system"
+groups = ["system", "drmrpc"]
 
 [[service]]
 path = "/vendor/bin/hw/android.hardware.gatekeeper@1.0-service-qti"
 loader = "/system/bin/bootstrap/linker64"
 libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
-user = "root"
-groups = ["root"]
+user = "system"
+groups = ["system"]
 
 # WLAN：QCA6490。
 # 决定性证据：开机后 /sys/module/ 下只有 qca6490（以及 btqca），没有 qca6750；
