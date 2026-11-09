@@ -367,7 +367,7 @@ impl Inputs {
             let (path, _) = self.buttons.remove(i);
             self.seen.remove(&path);
         }
-        if !self.touch_seen && out.iter().any(|e| matches!(e, Event::Touch(_))) {
+        if !self.touch_seen && out.iter().any(|e| matches!(e, Event::Touch(..))) {
             self.touch_seen = true;
             // The log is a courtesy: a write that fails is no reason to stop
             // reading the panel.
