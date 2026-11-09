@@ -170,7 +170,10 @@ user = "root"
 groups = ["root"]
 
 [[service]]
-path = "/mnt/system/system/bin/hwservicemanager"
+path = "/mnt/system_ext/bin/hwservicemanager"
+# 注意：/mnt/system/system/bin/hwservicemanager 是指向
+# /system/system_ext/bin/... 的绝对路径符号链接，recovery 下解析不了，
+# 真实文件在 system_ext 分区（挂载在 /mnt/system_ext）。
 libraries = ["/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
