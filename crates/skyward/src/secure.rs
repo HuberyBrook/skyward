@@ -247,11 +247,16 @@ pub fn publish_descriptions(wanted: &[String], files: &[String]) -> Result<usize
         // of what had registered with it, and nothing registers again by
         // itself, so init starts each of those services again, as the
         // installed system's init does whenever its directory restarts.
-        let registered = registered()?;
-        let was = crate::services::running(DIRECTORY_PROGRAM);
-        skyward_sys::set_prop("ctl.restart", DIRECTORY_SERVICE).context("have the service directory start again")?;
-        answering_again(was)?;
-        register_again(&registered)?;
+        //
+        // A directory not yet running needs none of that: it reads what is
+        // there when it starts, and a recovery's init runs no directory of
+        // its own to be restarted through.
+        if let Some(was) = crate::services::running(DIRECTORY_PROGRAM) {
+            let registered = registered()?;
+            skyward_sys::set_prop("ctl.restart", DIRECTORY_SERVICE).context("have the service directory start again")?;
+            answering_again(Some(was))?;
+            register_again(&registered)?;
+        }
     }
     Ok(copied)
 }
