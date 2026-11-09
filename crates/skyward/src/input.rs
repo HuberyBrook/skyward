@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use evdev::raw_stream::RawDevice;
 use evdev::{AbsoluteAxisCode, EventSummary, InputEvent, KeyCode, PropType, SynchronizationCode};
-use skyward_config::Write;
+use skyward_config::{Touch as TouchConfig, Write};
 use skyward_sys::sleep::Wakeful;
 use skyward_ui::app::{Key, Touch};
 use std::collections::HashSet;
@@ -79,13 +79,18 @@ struct Panel {
     was_down: bool,
     raw: (i32, i32),
     moved: bool,
+    /// How the panel's axes lie against the screen's, from the device's
+    /// configuration: exchanged first, then either flipped.
+    swap_axes: bool,
+    flip_x: bool,
+    flip_y: bool,
     /// The kernel dropped events that were not read in time; what arrives
     /// up to the next report is incomplete.
     dropped: bool,
 }
 
 impl Panel {
-    fn new(path: PathBuf, dev: RawDevice) -> Result<Self> {
+    fn new(path: PathBuf, dev: RawDevice, swap_axes: bool, flip_x: bool, flip_y: bool) -> Result<Self> {
         let mut x_range = None;
         let mut y_range = None;
         let mut slots = 1;
@@ -109,7 +114,7 @@ impl Panel {
         }
         set_nonblocking(dev.as_raw_fd()).context("make touch non-blocking")?;
         let mut panel =
-            Panel { dev, path, x_range, y_range, slots, slot: 0, down: false, was_down: false, raw: (0, 0), moved: false, dropped: false };
+            Panel { dev, path, x_range, y_range, slots, slot: 0, down: false, was_down: false, raw: (0, 0), moved: false, swap_axes, flip_x, flip_y, dropped: false };
         // The kernel drops a position equal to the one a slot already holds,
         // so a touch landing where the last one lifted carries no position;
         // start from what the panel holds now.
@@ -147,8 +152,22 @@ impl Panel {
                     let time = e.as_ref().time;
                     let at = time.tv_sec as u64 * 1000 + time.tv_usec as u64 / 1000;
                     let span = |r: (i32, i32)| (r.1 - r.0).max(1) as f32;
-                    let x = (self.raw.0 - self.x_range.0) as f32 / span(self.x_range) * w;
-                    let y = (self.raw.1 - self.y_range.0) as f32 / span(self.y_range) * h;
+                    // Each axis is brought into 0..1 first, so that the
+                    // exchange and the flips below are plain arithmetic on
+                    // fractions of the panel rather than on raw counts.
+                    let mut nx = (self.raw.0 - self.x_range.0) as f32 / span(self.x_range);
+                    let mut ny = (self.raw.1 - self.y_range.0) as f32 / span(self.y_range);
+                    if self.swap_axes {
+                        std::mem::swap(&mut nx, &mut ny);
+                    }
+                    if self.flip_x {
+                        nx = 1.0 - nx;
+                    }
+                    if self.flip_y {
+                        ny = 1.0 - ny;
+                    }
+                    let x = nx * w;
+                    let y = ny * h;
                     match (self.was_down, self.down) {
                         (false, true) => out.push(Event::Touch(Touch::Down(x, y), at)),
                         (true, true) if self.moved => out.push(Event::Touch(Touch::Move(x, y), at)),
@@ -189,12 +208,17 @@ pub struct Inputs {
     seen: HashSet<PathBuf>,
     /// What the touchscreen is told each time its panel is taken in.
     touch_writes: Vec<Write>,
+    /// How the panel's axes lie against the screen's, handed to each panel
+    /// taken in; see [`Panel`].
+    swap_axes: bool,
+    flip_x: bool,
+    flip_y: bool,
     w: f32,
     h: f32,
 }
 
 impl Inputs {
-    pub fn open(w: u32, h: u32, touch_writes: Vec<Write>) -> Result<Self> {
+    pub fn open(w: u32, h: u32, touch: TouchConfig) -> Result<Self> {
         let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
         if fd < 0 {
             return Err(io::Error::last_os_error()).context("create inotify instance");
@@ -214,7 +238,10 @@ impl Inputs {
             panel: None,
             buttons: Vec::new(),
             seen: HashSet::new(),
-            touch_writes,
+            touch_writes: touch.writes,
+            swap_axes: touch.swap_axes,
+            flip_x: touch.flip_x,
+            flip_y: touch.flip_y,
             w: w as f32,
             h: h as f32,
         };
@@ -242,7 +269,7 @@ impl Inputs {
             eprintln!("input {}: {:?} direct={direct} multitouch={mt} keys={keys}", path.display(), dev.name().unwrap_or("?"));
             if direct && mt && self.panel.is_none() {
                 self.wakeful.add(dev.as_raw_fd())?;
-                self.panel = Some(Panel::new(path, dev)?);
+                self.panel = Some(Panel::new(path, dev, self.swap_axes, self.flip_x, self.flip_y)?);
                 for w in &self.touch_writes {
                     fs::write(&w.path, &w.value).with_context(|| format!("write {} to {}", w.value, w.path))?;
                     skyward_sys::kmsg(&format!("wrote {} to {} for the touchscreen", w.value, w.path))?;
