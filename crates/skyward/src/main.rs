@@ -528,9 +528,9 @@ fn bring_up_binder() -> Result<()> {
 #[cfg(target_os = "android")]
 fn bring_up(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
     bring_up_binder()?;
-    let nodes = skyward_sys::ueventd::apply()?;
+    let nodes = skyward_sys::ueventd::apply().context("give the device nodes their owners")?;
     skyward_sys::kmsg(&format!("{nodes} device nodes given the owner their phone describes"))?;
-    let props = skyward_info::installed_props(slot)?;
+    let props = skyward_info::installed_props(slot).context("read the installed system's properties")?;
     adopt_installed_version(&props)?;
     // Without logd the phone's own programs still run, and only what they
     // log is lost, so why it did not start goes to the kernel log.
@@ -545,22 +545,22 @@ fn bring_up(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
     // there to ueventd, which looks in the recovery's firmware folders.
     std::fs::write(FIRMWARE_FALLBACK, "1").with_context(|| format!("write 1 to {FIRMWARE_FALLBACK}"))?;
     if let Some(firmware) = &cfg.firmware {
-        mount_firmware(&firmware.partition)?;
+        mount_firmware(&firmware.partition).with_context(|| format!("mount the {} partition", firmware.partition))?;
     }
     for name in &cfg.partitions.mounted {
-        let at = skyward_block::fstab::mount(name)?;
+        let at = skyward_block::fstab::mount(name).with_context(|| format!("mount {name}"))?;
         skyward_sys::kmsg(&format!("{name} is mounted on {}", at.display()))?;
     }
-    for path in load_modules(cfg, &cfg.modules.load)? {
+    for path in load_modules(cfg, &cfg.modules.load).context("load the configured kernel modules")? {
         skyward_sys::kmsg(&format!("loaded {}", path.display()))?;
     }
     if !cfg.owners.is_empty() {
-        let handed = hand_over(&cfg.owners)?;
+        let handed = hand_over(&cfg.owners).context("hand the phone's own files to their accounts")?;
         skyward_sys::kmsg(&format!("{handed} of the phone's own files handed to the accounts its init gives them"))?;
     }
     let hardware: Vec<String> = services.iter().filter_map(|s| s.ready_hardware_service.clone()).collect();
     if !hardware.is_empty() {
-        secure::prepare_hardware_directory(&hardware)?;
+        secure::prepare_hardware_directory(&hardware).context("make the hardware services' directory")?;
         skyward_sys::kmsg("the directory for the phone's hardware services can run")?;
     }
     // Only a program that has to register with the service directory needs
@@ -572,14 +572,14 @@ fn bring_up(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
     registering.extend(cfg.wlan.iter().map(|w| w.service.clone()));
     let files: Vec<String> = services.iter().filter_map(|s| s.description.clone()).collect();
     if !registering.is_empty() || !files.is_empty() {
-        let described = secure::publish_descriptions(&registering, &files)?;
+        let described = secure::publish_descriptions(&registering, &files).context("publish the phone's service descriptions")?;
         skyward_sys::kmsg(&format!("{described} of the phone's own service descriptions published"))?;
     }
-    let libraries = secure::libraries()?;
+    let libraries = secure::libraries().context("open the installed system's libraries")?;
     if let Some(dir) = &libraries {
         skyward_sys::kmsg(&format!("the phone's own libraries are at {}", dir.display()))?;
     }
-    services::start(&services, libraries.as_deref())?;
+    services::start(&services, libraries.as_deref()).context("start the phone's own programs")?;
     agree_on_the_notes_key(&registering)
 }
 
@@ -612,7 +612,12 @@ fn hand_over(owners: &[skyward_config::Owners]) -> Result<usize> {
         }
     }
     if !absent.is_empty() {
-        skyward_sys::kmsg(&format!("{} of the phone's own files are not there to hand over: {}", absent.len(), absent.join(" ")))?;
+        // The kernel takes one short record at a time and refuses a longer one
+        // outright, so name a few and count the rest.
+        let named: Vec<&str> = absent.iter().take(6).copied().collect();
+        let rest = absent.len() - named.len();
+        let more = if rest > 0 { format!(" and {rest} more") } else { String::new() };
+        let _ = skyward_sys::kmsg(&format!("{} files are not there to hand over: {}{more}", absent.len(), named.join(" ")));
     }
     Ok(handed)
 }
