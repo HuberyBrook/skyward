@@ -477,6 +477,46 @@ fn load_modules(cfg: &DeviceConfig, names: &[String]) -> Result<Vec<PathBuf>> {
     skyward_modules::load(&dirs, names)
 }
 
+/// Where the kernel's binderfs is mounted when the recovery's init has made
+/// no binder nodes, and the nodes the phone's own programs look for.
+#[cfg(target_os = "android")]
+const BINDERFS: &str = "/dev/binderfs";
+
+#[cfg(target_os = "android")]
+const BINDER_NODES: [&str; 3] = ["binder", "hwbinder", "vndbinder"];
+
+/// Make the binder drivers the phone's own services are reached through. A
+/// recovery's init makes none of them, and without them the key service
+/// cannot be asked for the keys that open the data partition, nor can the
+/// WLAN's supplicant register itself.
+#[cfg(target_os = "android")]
+fn bring_up_binder() -> Result<()> {
+    if Path::new("/dev/binder").exists() {
+        return Ok(());
+    }
+    let at = Path::new(BINDERFS);
+    std::fs::create_dir_all(at).with_context(|| format!("make {}", at.display()))?;
+    let kind = std::ffi::CString::new("binder").expect("binder holds no NUL");
+    let target = std::ffi::CString::new(BINDERFS).expect("the binderfs folder holds no NUL");
+    if unsafe { libc::mount(kind.as_ptr(), target.as_ptr(), kind.as_ptr(), 0, std::ptr::null()) } != 0 {
+        let e = std::io::Error::last_os_error();
+        // Found mounted already is what is wanted here.
+        if e.raw_os_error() != Some(libc::EBUSY) {
+            return Err(e).with_context(|| format!("mount binderfs on {BINDERFS}"));
+        }
+    }
+    for name in BINDER_NODES {
+        let node = at.join(name);
+        let link = Path::new("/dev").join(name);
+        if node.exists() && !link.exists() {
+            std::os::unix::fs::symlink(&node, &link)
+                .with_context(|| format!("point {} at {}", link.display(), node.display()))?;
+        }
+    }
+    skyward_sys::kmsg("the binder drivers are up")?;
+    Ok(())
+}
+
 /// Start the recovery's own logd where it needs libraries of the installed
 /// system, make the phone's firmware reachable to its drivers, mount the
 /// partitions its own programs and drivers use where it mounts them, load
@@ -487,6 +527,7 @@ fn load_modules(cfg: &DeviceConfig, names: &[String]) -> Result<Vec<PathBuf>> {
 /// names, only those this phone's build of the hardware runs are started.
 #[cfg(target_os = "android")]
 fn bring_up(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
+    bring_up_binder()?;
     let nodes = skyward_sys::ueventd::apply()?;
     skyward_sys::kmsg(&format!("{nodes} device nodes given the owner their phone describes"))?;
     let props = skyward_info::installed_props(slot)?;

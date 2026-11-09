@@ -153,6 +153,41 @@ oneshot = true
 user = "root"
 groups = ["root", "system", "wakelock", "graphics"]
 
+# 解密要的那套 binder 服务。recovery 的 init 一个都不启动，而 metadata
+# 加密的密钥只存在 TEE 里：keymint 通过 qseecom 去问它，凭证交给 gatekeeper，
+# 注册与查找都走 servicemanager/hwservicemanager。
+# 顺序照 TWRP 的 init.recovery.qcom.rc：先服务目录，再 qseecom，最后密钥与凭证。
+# 路径都在手机自己的分区上（recovery 的 /system 是它自己的小 ramdisk）。
+[[service]]
+path = "/mnt/system/system/bin/servicemanager"
+libraries = ["/mnt/system/system/lib64"]
+user = "root"
+groups = ["root"]
+
+[[service]]
+path = "/mnt/system/system_ext/bin/hwservicemanager"
+libraries = ["/mnt/system/system_ext/lib64", "/mnt/system/system/lib64"]
+user = "root"
+groups = ["root"]
+
+[[service]]
+path = "/vendor/bin/hw/vendor.qti.hardware.qseecom@1.0-service"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+user = "root"
+groups = ["root"]
+
+[[service]]
+path = "/vendor/bin/hw/android.hardware.security.keymint-service-qti"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+user = "root"
+groups = ["root"]
+
+[[service]]
+path = "/vendor/bin/hw/android.hardware.gatekeeper@1.0-service-qti"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+user = "root"
+groups = ["root"]
+
 # WLAN：QCA6490。
 # 决定性证据：开机后 /sys/module/ 下只有 qca6490（以及 btqca），没有 qca6750；
 # platform 节点为 b0000000.qcom,cnss-qca6490。vendor 里虽然同时存在
