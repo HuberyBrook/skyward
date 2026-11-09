@@ -1124,6 +1124,11 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     // Whether the panel's frame memory has been blacked out for an off
     // panel; cleared once a real frame is shown again.
     let mut blanked = false;
+    // Whether the last frame drawn was a real one for a lit panel. Blacking
+    // the panel out presents a frame of its own, and a display the driver
+    // keeps on shows the frame it last had, so a panel lit again is drawn for
+    // afresh rather than left with the black one.
+    let mut lit = true;
     // When the panel gone dark began to rest.
     let mut rested_at: Option<Instant> = None;
     // Started for fastboot, the port goes to the phone's own fastbootd. The
@@ -1450,7 +1455,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
         let mut shown = false;
         if panel.is_some() {
             // A display turned off comes on again with a frame drawn for it.
-            if app.take_dirty() || !surface.is_on() {
+            if app.take_dirty() || !surface.is_on() || !lit {
                 let t0 = Instant::now();
                 app.compose(&mut screen, &fonts, &info, &shown_clock, now);
                 surface.present(&screen)?;
@@ -1461,6 +1466,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 shown = true;
             }
             blanked = false;
+            lit = true;
         } else if !blanked {
             // Black out the panel's frame memory before the backlight goes
             // to 0 and the display off, so an OLED that floors the backlight
@@ -1469,6 +1475,7 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             surface.present(&screen)?;
             surface.settle()?;
             blanked = true;
+            lit = false;
         }
         // After the frame is on the panel, so a panel coming back on lights
         // with what it should show now, never with what it showed when it
