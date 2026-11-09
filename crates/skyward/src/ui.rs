@@ -1057,6 +1057,13 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
     let mut inputs = Inputs::open(w, h, cfg.touch.clone())?;
     let started = Instant::now();
     let mut touch_known = false;
+    // The panel's driver writes its firmware after the panel has come up and
+    // says so in the kernel log; the panel reports nothing until then. Read
+    // that line so the note goes as soon as the panel is really up, without
+    // waiting for a finger.
+    let mut firmware_watch = FirmwareWatch::open();
+    let mut firmware_written = false;
+    let mut firmware_at = Instant::now();
     // adbd and fastbootd ask over it to go over to fastboot and back.
     let control = Control::open()?;
     let mut haptics = cfg.haptics.as_ref().map(Haptics::open).transpose()?;
@@ -1391,9 +1398,19 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             }
         }
         // A panel that has come up stays silent until its firmware is written
-        // and its controller started: say so until the first touch arrives,
-        // and stop saying it if none ever does.
-        let waking = inputs.has_panel() && !inputs.touch_ready();
+        // and its controller started: say so until the driver says the
+        // firmware is written or a touch arrives, and stop saying it if
+        // neither happens.
+        if !firmware_written
+            && started.elapsed() < Duration::from_secs(40)
+            && firmware_at.elapsed() >= Duration::from_millis(250)
+        {
+            firmware_at = Instant::now();
+            if let Some(watch) = &mut firmware_watch {
+                firmware_written = watch.written();
+            }
+        }
+        let waking = inputs.has_panel() && !inputs.touch_ready() && !firmware_written;
         if waking && started.elapsed() < Duration::from_secs(40) {
             app.touch_waking(now);
         }
@@ -2657,6 +2674,55 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             };
             skyward_sys::kmsg(&format!("file transfer stops: {why:#}"))?;
             app.file_transfer_failed(false, &skyward_ui::fmt::transfer_stopped(app.state.lang, &format!("{why:#}")), now);
+        }
+    }
+}
+
+/// The kernel's log, read for the line the panel's driver writes once its
+/// firmware is written. The panel's device comes up before that and reports
+/// nothing until the controller runs, so this tells a panel still starting
+/// from one that has stalled.
+struct FirmwareWatch {
+    log: fs::File,
+}
+
+/// What the Novatek driver writes when the controller's firmware is written
+/// and the controller runs.
+const FIRMWARE_WRITTEN: &[u8] = b"Update firmware success";
+
+impl FirmwareWatch {
+    fn open() -> Option<Self> {
+        use std::os::unix::fs::OpenOptionsExt;
+        // Opened without blocking: a read answers only what has been logged
+        // since the last look.
+        let mut log = fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open("/dev/kmsg")
+            .ok()?;
+        // Read what has been logged already, so a panel whose firmware was
+        // written before this program started counts as up at once.
+        let _ = std::io::Seek::seek(&mut log, std::io::SeekFrom::Start(0));
+        Some(Self { log })
+    }
+
+    /// Whether the driver has said its firmware is written since the last
+    /// look; false while nothing new has been logged.
+    fn written(&mut self) -> bool {
+        use std::io::Read;
+        let mut buf = [0u8; 8192];
+        loop {
+            match self.log.read(&mut buf) {
+                Ok(0) => return false,
+                Ok(n) => {
+                    if buf[..n].windows(FIRMWARE_WRITTEN.len()).any(|w| w == FIRMWARE_WRITTEN) {
+                        return true;
+                    }
+                }
+                // Nothing new has been logged, or the log cannot be read:
+                // either way the firmware has not been said to be written.
+                Err(_) => return false,
+            }
         }
     }
 }
