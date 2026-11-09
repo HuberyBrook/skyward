@@ -61,7 +61,23 @@ load = ["nt36xxx-i2c", "xiaomi_touch", "nt36532_touch"]
 [touch]
 swap_axes = true
 flip_x = false
-flip_y = false
+flip_y = true
+
+# 触摸控制器（Novatek NT36532）的固件：手机自己的分区里没有这三个文件，
+# 驱动 probe 时按名字向内核固件加载器请求，拿不到就一直静默——表现为"屏幕
+# 上没有触摸"。由 packer 打进 ramdisk 的 /lib/firmware，开机即用，不必再
+# 手工往镜像里注入。
+[[touch.firmware]]
+name = "novatek_nt36532_m80_fw_csot.bin"
+path = "devices/yudi/novatek_nt36532_m80_fw_csot.bin"
+
+[[touch.firmware]]
+name = "novatek_nt36532_m80_mp_csot.bin"
+path = "devices/yudi/novatek_nt36532_m80_mp_csot.bin"
+
+[[touch.firmware]]
+name = "novatek_spi_fw.bin"
+path = "devices/yudi/novatek_spi_fw.bin"
 
 # 触摸节点权限，来自 /vendor/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc
 # 的 chown/chmod 行（系统用户读取触摸层节点、开关与驱动的 /proc 文件）。

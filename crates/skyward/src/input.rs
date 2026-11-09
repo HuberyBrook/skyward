@@ -213,6 +213,10 @@ pub struct Inputs {
     swap_axes: bool,
     flip_x: bool,
     flip_y: bool,
+    /// Set once the panel has reported a touch. A panel that has just come up
+    /// stays silent until its firmware is written and its controller runs, so
+    /// this is what tells a working panel from one still starting.
+    touch_seen: bool,
     w: f32,
     h: f32,
 }
@@ -242,6 +246,7 @@ impl Inputs {
             swap_axes: touch.swap_axes,
             flip_x: touch.flip_x,
             flip_y: touch.flip_y,
+            touch_seen: false,
             w: w as f32,
             h: h as f32,
         };
@@ -307,6 +312,13 @@ impl Inputs {
         self.panel.is_some()
     }
 
+    /// Whether the panel has reported a touch yet. A panel that has just come
+    /// up stays silent until its firmware is written and its controller
+    /// started, so the pages cannot be worked with the finger until then.
+    pub fn touch_ready(&self) -> bool {
+        self.touch_seen
+    }
+
     /// Readable while a device has something queued, or /dev/input changed.
     pub fn fd(&self) -> RawFd {
         self.wakeful.fd()
@@ -354,6 +366,12 @@ impl Inputs {
         for i in removed.into_iter().rev() {
             let (path, _) = self.buttons.remove(i);
             self.seen.remove(&path);
+        }
+        if !self.touch_seen && out.iter().any(|e| matches!(e, Event::Touch(_))) {
+            self.touch_seen = true;
+            // The log is a courtesy: a write that fails is no reason to stop
+            // reading the panel.
+            let _ = skyward_sys::kmsg("the touch panel reported a touch");
         }
         Ok(out)
     }

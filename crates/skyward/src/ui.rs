@@ -1385,6 +1385,13 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
                 app.touchscreen_missing();
             }
         }
+        // A panel that has come up stays silent until its firmware is written
+        // and its controller started: say so until the first touch arrives,
+        // and stop saying it if none ever does.
+        let waking = inputs.has_panel() && !inputs.touch_ready();
+        if waking && started.elapsed() < Duration::from_secs(40) {
+            app.touch_waking(now);
+        }
         for fx in app.tick(now) {
             match fx {
                 Effect::Haptic => {

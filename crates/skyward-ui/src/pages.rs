@@ -146,6 +146,15 @@ pub fn confirm_label(which: Confirm, s: &State) -> (&'static str, bool) {
 pub const HOME_TITLE: &str = "Skyward";
 pub const SEARCH_HINT: Text = ["搜索功能与分区", "搜尋功能與分割區", "Search features and partitions"];
 
+/// Shown from the moment the panel comes up until it first reports a touch:
+/// its firmware is written and its controller started only then, so the
+/// pages cannot be worked with the finger for a few seconds yet.
+pub const TOUCH_WAKING: Text = [
+    "触摸屏正在启动，稍等片刻",
+    "觸控螢幕正在啟動，稍等片刻",
+    "Touch panel is starting up, one moment",
+];
+
 const REBOOT_TARGETS: [(Text, Option<Text>); 6] = [
     (["系统", "系統", "System"], None),
     (["恢复模式", "復原模式", "Recovery"], None),

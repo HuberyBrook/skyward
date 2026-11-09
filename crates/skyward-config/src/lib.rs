@@ -17,6 +17,10 @@ pub mod ramdisk {
     pub const MONO_LICENSE: &str = "skyward/KirkMono-OFL.txt";
     /// The recovery service binary init starts.
     pub const RECOVERY: &str = "system/bin/recovery";
+    /// Where the kernel's firmware loader looks for the images drivers ask
+    /// for by name: a controller whose firmware the phone's own partitions do
+    /// not carry is given it from the ramdisk here.
+    pub const FIRMWARE: &str = "lib/firmware";
     /// The first program of a system installed beside the installed one,
     /// which Skyward puts in that system's init_boot image: linked
     /// statically, since it runs before any system's libraries are there.
@@ -330,6 +334,12 @@ pub struct Touch {
     /// Whether the panel's Y, once exchanged, runs the other way.
     #[serde(default)]
     pub flip_y: bool,
+    /// Firmware the panel's driver asks the kernel's loader for by name, put
+    /// into the image by the packer: a touch controller whose firmware no
+    /// partition of the phone carries would otherwise come up silent, and
+    /// nothing on the screen could be touched.
+    #[serde(default)]
+    pub firmware: Vec<Firmware>,
 }
 
 /// Partitions as the phone itself mounts them.

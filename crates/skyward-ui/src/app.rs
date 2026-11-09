@@ -6267,6 +6267,21 @@ impl App {
         self.dirty = true;
     }
 
+    /// The panel has come up but not reported yet, so the pages cannot be
+    /// worked with the finger for a moment longer: say so, keeping the word
+    /// on screen until the first touch arrives.
+    pub fn touch_waking(&mut self, now: u64) {
+        let text = self.state.lang.pick(pages::TOUCH_WAKING);
+        match &self.toast {
+            // Still up and good for a while: nothing to redraw.
+            Some((said, at)) if said.as_str() == text && now + 500 < *at => {}
+            _ => {
+                self.toast = Some((text.to_string(), now + TOAST_MS));
+                self.dirty = true;
+            }
+        }
+    }
+
     /// No touchscreen answers: the keys work the pages, their light shown
     /// from now on.
     pub fn touchscreen_missing(&mut self) {
