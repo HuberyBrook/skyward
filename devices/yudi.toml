@@ -1,0 +1,175 @@
+# Skyward device configuration — 小米平板 6 Max 14（yudi, 2307BRPDCC）
+#
+# 数值来源（真机采集，HyperOS OS4.0.6.0.XMHCNXM / Android 17）：
+#   wm size                                  1800x2880
+#   ro.sf.lcd_density                        360
+#   /sys/module/                             nt36532_touch / nt36xxx_i2c /
+#                                            xiaomi_touch / qcom_hv_haptics 均在线
+#   /sys/devices/platform/soc/               b0000000.qcom,cnss-qca6490  → WiFi 是 QCA6490
+#   /vendor/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc
+#                                            48 条 chown/chmod，下面 owners 取其路径
+#   /sys/class/qcom-haptics/                 lra_frequency_hz 存在
+#   /vendor/lib/modules/modules.load         触摸顺序见 [modules].load 注释
+#   /vendor/etc/init/hw/init.qti.kernel.rc:166
+#                                            kernel-post-boot 服务定义（见 [[service]]）
+#   /sys/module/qca6490                      WiFi 实际加载的是 qca6490，非 qca6750
+#   /mnt/vendor/persist/wlan/wlan_mac.bin    MAC 地址实际位置
+#
+# 与 fuxi（小米 13）的关键不同：
+#   - 触摸 IC 是 Novatek NT36532（fuxi 是 ST FTS），驱动为 nt36532_touch + xiaomi_touch
+#   - 触摸权限 rc 在 /vendor/etc/init/（fuxi 在 /odm/etc/init/）
+#   - 没有 /odm/bin/touch_report、/odm/bin/touchsensor（那是 ST FTS 的方案）
+#     → 故不写 fuxi 那两条 [[service]]（已用 root 确认 /odm/bin 下无任何 touch 程序）
+#   - WiFi 固件目录是 qca6490（fuxi 是 kiwi_v2），且 MAC 在 persist/wlan/ 而非子目录
+#
+# ⚠ 未经验证：本文件从未参与过一次成功的 Skyward 构建与上机。
+#   display 的宽高取系统当前方向（竖屏 1800x2880），若界面方向不对，
+#   交换 width/height 或等待 Skyward 支持旋转配置。
+
+[device]
+codename = "yudi"
+brand = "Xiaomi"
+model = "Xiaomi Pad 6 Max 14"
+ab = true
+soc = { hans = "第一代骁龙®8+移动平台", hant = "Snapdragon® 8+ Gen 1 行動平台", en = "Snapdragon® 8+ Gen 1 Mobile Platform" }
+os_version_prop = "ro.mi.os.version.incremental"
+
+[display]
+# 真机 wm size = 1800x2880（系统按竖屏方向持有这块 2880x1800 的面板）
+width = 1800
+height = 2880
+density = 360
+
+[modules]
+sources = ["vendor_boot", "vendor_dlkm", "vendor"]
+# 触摸：Novatek NT36532。顺序照抄真机 modules.load 的行序（行号见下）：
+#   136 nt36xxx-i2c.ko → 253 xiaomi_touch.ko → 254 nt36532_touch.ko
+# 先加载 I2C 传输层，再加载小米触摸抽象层，最后才是 NT36532 本体。
+# 顺序颠倒会让 nt36532_touch 在 probe 时找不到 xiaomi_touch 的符号。
+load = ["nt36xxx-i2c", "xiaomi_touch", "nt36532_touch"]
+
+# 触摸节点权限，来自 /vendor/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc
+# 的 chown/chmod 行（系统用户读取触摸层节点、开关与驱动的 /proc 文件）。
+[[owners]]
+user = "system"
+group = "system"
+mode = 0o664
+paths = [
+    "/dev/xiaomi-touch",
+    "/dev/xiaomi-touch-knock",
+    "/dev/xiaomi-thp",
+    "/dev/mipp_pen0",
+    "/sys/class/touch/tp_dev/fod_status",
+    "/sys/class/touch/touch_dev/gesture_single_tap_state",
+    "/sys/class/touch/touch_dev/fod_press_status",
+    "/sys/class/touch/touch_dev/clicktouch_raw",
+    "/sys/class/touch/touch_dev/update_rawdata",
+    "/sys/class/touch/touch_dev/enable_touch_raw",
+    "/sys/class/touch/touch_dev/enable_touch_delta",
+    "/sys/class/touch/touch_dev/touch_thp_dump",
+    "/sys/class/touch/touch_dev/touch_thp_cmd",
+    "/sys/class/touch/touch_dev/touch_thp_cmd_data",
+    "/sys/class/touch/touch_dev/touch_thp_cmd_ready",
+    "/sys/class/touch/touch_dev/touch_thp_rx_num",
+    "/sys/class/touch/touch_dev/touch_thp_tx_num",
+    "/sys/class/touch/touch_dev/touch_thp_x_resolution",
+    "/sys/class/touch/touch_dev/touch_thp_y_resolution",
+    "/sys/class/touch/touch_dev/touch_thp_smooth",
+    "/sys/class/touch/touch_dev/touch_thp_noisefilter",
+    "/sys/class/touch/touch_dev/touch_thp_downthd",
+    "/sys/class/touch/touch_dev/touch_thp_upthd",
+    "/sys/class/touch/touch_dev/touch_thp_movethd",
+    "/sys/class/touch/touch_dev/touch_thp_islandthd",
+    "/sys/class/touch/touch_dev/touch_thp_film",
+    "/sys/class/touch/touch_dev/touch_thp_mem_notify",
+    "/sys/class/touch/touch_dev/touch_thp_testmode",
+    "/sys/class/touch/touch_dev/touch_thp_testresult",
+    "/sys/class/touch/touch_dev/touch_thp_preset_point",
+    "/sys/class/touch/touch_dev/suspend_state",
+    "/sys/class/touch/touch_dev/prox_sensor",
+    "/sys/class/touch/touch_dev/prox_sensor_data",
+    "/sys/class/touch/touch_dev/palm_sensor",
+    "/sys/class/touch/touch_dev/palm_sensor_data",
+    "/sys/class/touch/touch_dev/hold_sensor",
+    "/sys/class/touch/touch_dev/touch_active_status",
+    "/sys/class/touch/touch_dev/touch_finger_status",
+    "/sys/class/touch/touch_dev/touch_irq_no",
+    "/sys/class/touch/touch_dev/touch_sensor",
+    "/sys/class/touch/touch_dev/touch_sensor_ctrl",
+    "/sys/class/touch/touch_dev/touch_ic_buffer",
+    "/sys/class/touch/touch_dev/touch_doze_analysis",
+    "/proc/tp_selftest",
+    "/proc/tp_selftest_1",
+    "/proc/tp_hal_version",
+    "/proc/tp_lockdown_info",
+]
+
+# 内核 post_boot：配置 CPU/GPU/温控等平台参数。
+# 已确认：/vendor/etc/init/hw/init.qti.kernel.rc:166 定义
+#   service kernel-post-boot /vendor/bin/sh /vendor/bin/init.kernel.post_boot.sh
+#       class core
+#       user root
+#       group root system wakelock graphics
+#       oneshot
+# 与 fuxi 的配置逐项一致，故照搬。
+# 注意：vendor 里另有 init.kernel.post_boot-taro.sh（taro 平台专用），
+# 但系统启动走的是通用 post_boot.sh（它内部按平台分发），不要改成 -taro 版。
+[[service]]
+path = "/vendor/bin/sh"
+args = ["/vendor/bin/init.kernel.post_boot.sh"]
+libraries = ["/system/lib64", "/vendor/lib64"]
+oneshot = true
+user = "root"
+groups = ["root", "system", "wakelock", "graphics"]
+
+# WLAN：QCA6490。
+# 决定性证据：开机后 /sys/module/ 下只有 qca6490（以及 btqca），没有 qca6750；
+# platform 节点为 b0000000.qcom,cnss-qca6490。vendor 里虽然同时存在
+# qca_cld3_qca6750.ko，但那不是本机芯片，加载它只会 probe 失败。
+#
+# 设置文件与 MAC 地址在 recovery 里被 modem 固件目录覆盖后需要重新给出：
+#   - WCNSS_qcom_cfg.ini 来自 /vendor/etc/wifi/qca6490/
+#   - wlan_mac.bin 来自 /mnt/vendor/persist/wlan/（注意：不在 qca6490 子目录下，
+#     真机上 /mnt/vendor/persist/qca6490/ 是空目录）
+[wlan]
+modules = ["qca_cld3_qca6490"]
+writes = [{ path = "/sys/kernel/cnss/fs_ready", value = "1" }]
+firmware = [
+    { name = "wlan/qca_cld/qca6490/WCNSS_qcom_cfg.ini", path = "/vendor/etc/wifi/qca6490/WCNSS_qcom_cfg.ini" },
+    { name = "wlan/qca_cld/qca6490/wlan_mac.bin", partition = "persist", path = "wlan/wlan_mac.bin" },
+]
+interface = "wlan0"
+supplicant = "/vendor/bin/hw/wpa_supplicant"
+libraries = ["/vendor/lib64", "/system/lib64"]
+service = "android.hardware.wifi.supplicant.ISupplicant/default"
+probe = "http://connect.rom.miui.com/generate_204"
+
+# 小米 OTA 服务器（中国版系统自带的更新器所询问的地址）
+[update]
+server = "https://update.miui.com/updates/miotaV3.php"
+
+# 震动：qcom-hv-haptics，与 fuxi 同一驱动。真机 /sys/class/qcom-haptics/lra_frequency_hz 存在。
+# click/resonance/strength 沿用 fuxi 的取值（同驱动、同代平台），未在 yudi 上逐一试过。
+[haptics]
+click = 0
+resonance = "/sys/class/qcom-haptics/lra_frequency_hz"
+strength = { lightest = 0.5, strongest = 1.0 }
+
+# 原厂构建：Skyward 不自己造 ramdisk，而是在原厂 recovery 镜像里把 recovery
+# service 换掉，保留原厂的 init、adbd、SELinux policy 与整套库。所以必须拿到
+# 一份完整的原厂 recovery 分区镜像。
+#
+# 下载源刻意用 bkt-sgp 阿里云镜像，而不是 bigota.d.miui.com：
+#   实测 bigota 对若干出口 IP 直接返回 403（连根路径都 403，与签名无关），
+#   而 bkt-sgp 无需签名即可匿名读取（206 / Accept-Ranges: bytes）。
+#   fuxi、houji、ishtar、nezha 四份官方配置用的也是这个域名。
+#
+# recovery 的 SHA-256 直接取自包内 payload.bin 的 DeltaArchiveManifest
+# （recovery.new_partition_info.hash），不需要下载 6.7 GB 全包：
+#   size   104857600 bytes（与 recovery 分区大小一致）
+#   sha256 0f76fd4d6f78e705e7344a990c28ee37ff0480d29095035b29dc1ccf9ba291a5
+# 该值必须与包内实际内容一致，take_stock_recovery() 用 ensure! 硬校验。
+[stock]
+version = "OS3.0.6.0.VMHCNXM"
+package = "https://bkt-sgp-miui-ota-update-alisgp.oss-ap-southeast-1.aliyuncs.com/OS3.0.6.0.VMHCNXM/yudi-ota_full-OS3.0.6.0.VMHCNXM-user-15.0-7b73783799.zip"
+recovery = "0f76fd4d6f78e705e7344a990c28ee37ff0480d29095035b29dc1ccf9ba291a5"
