@@ -317,6 +317,19 @@ pub struct Touch {
     /// step of starting the controller.
     #[serde(default)]
     pub writes: Vec<Write>,
+    /// Whether the panel reports its axes the other way round from the
+    /// screen. A recovery draws on the panel as the panel lies, while the
+    /// system may keep the same panel turned on its side, and the driver
+    /// then reports against that turned frame; the two axes are exchanged
+    /// before the flips below are applied.
+    #[serde(default)]
+    pub swap_axes: bool,
+    /// Whether the panel's X, once exchanged, runs the other way.
+    #[serde(default)]
+    pub flip_x: bool,
+    /// Whether the panel's Y, once exchanged, runs the other way.
+    #[serde(default)]
+    pub flip_y: bool,
 }
 
 /// Partitions as the phone itself mounts them.
