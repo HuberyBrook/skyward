@@ -48,6 +48,21 @@ sources = ["vendor_boot", "vendor_dlkm", "vendor"]
 # 顺序颠倒会让 nt36532_touch 在 probe 时找不到 xiaomi_touch 的符号。
 load = ["nt36xxx-i2c", "xiaomi_touch", "nt36532_touch"]
 
+# 触摸坐标：面板与系统持有方向差 90°。
+# 这块面板原生是 2880x1800（横屏），DRM mode 也是 2880x1800x120vid，
+# 但 HyperOS 用 ORIENTATION_270 把它当竖屏 1800x2880 用，触摸驱动随之按
+# 竖屏轴向上报。recovery 里没有 inputflinger 做那层旋转，skyward 的
+# input.rs 只做线性归一化、不旋转（见 crates/skyward/src/input.rs 的
+# read()：raw 值除以驱动上报的 span 再乘屏幕宽高）。
+# 结果就是手指横向划、界面纵向动。
+# 这三个开关在归一化之后按 swap -> flip_x -> flip_y 的顺序作用，
+# 覆盖 8 种轴向组合。当前值是按"交换两轴"推断的，若仍不对口，
+# 依次试 flip_x / flip_y 的组合即可，不必重新编译。
+[touch]
+swap_axes = true
+flip_x = false
+flip_y = false
+
 # 触摸节点权限，来自 /vendor/etc/init/vendor.xiaomi.hw.touchfeature@1.0-service.rc
 # 的 chown/chmod 行（系统用户读取触摸层节点、开关与驱动的 /proc 文件）。
 [[owners]]
