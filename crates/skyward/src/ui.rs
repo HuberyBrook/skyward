@@ -1512,9 +1512,12 @@ pub fn run(cfg: &DeviceConfig, font: &Path, mono: &Path, request: bcb::Request, 
             surface.rest()?;
             rested_at = Some(Instant::now());
         } else if rested_at.is_some_and(|at| at.elapsed() >= REST) {
-            // Rested long enough, the display goes off: the panel and the
-            // display processor feeding it stop drawing power.
-            surface.turn_off()?;
+            // The panel has rested long enough. Turning the display off here
+            // would leave it showing nothing when it came back: the display
+            // driver keeps the panel's planes as they were when their CRTC
+            // went off, and the frame committed on the way back does not set
+            // them again. Resting costs little on a recovery, so it stays
+            // resting.
             rested_at = None;
         }
         // A page at rest draws the rows it has yet to while nothing else
