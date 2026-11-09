@@ -42,7 +42,10 @@ pub fn start(services: &[Service], libraries: Option<&Path>) -> Result<()> {
     let known = ueventd::accounts(&ueventd::PASSWD_FILES.iter().chain(&ueventd::GROUP_FILES).copied().collect::<Vec<_>>());
     for s in services {
         if !Path::new(&s.path).is_file() {
-            bail!("{} is missing; is its partition mounted?", s.path);
+            // A build of the hardware that lacks the program is no reason for
+            // the programs after it to go unstarted.
+            skyward_sys::kmsg(&format!("{} is not on this phone; not started", s.path))?;
+            continue;
         }
         let mut s = s.clone();
         if let Some(dir) = libraries {

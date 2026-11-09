@@ -594,14 +594,25 @@ fn hand_over(owners: &[skyward_config::Owners]) -> Result<usize> {
     let known = ueventd::accounts(&ueventd::PASSWD_FILES.iter().chain(&ueventd::GROUP_FILES).copied().collect::<Vec<_>>());
     let id = |name: &str| ueventd::account(&known, name).with_context(|| format!("the phone has no account named {name}"));
     let mut handed = 0;
+    let mut absent: Vec<&str> = Vec::new();
     for run in owners {
         let (uid, gid) = (id(&run.user)?, id(&run.group)?);
         for path in &run.paths {
+            // A node only a driver of the installed system makes is not there
+            // to be given an owner: that is no reason to leave the rest of the
+            // phone's programs unstarted.
+            if !Path::new(path).exists() {
+                absent.push(path);
+                continue;
+            }
             std::os::unix::fs::chown(path, Some(uid), Some(gid)).with_context(|| format!("give {path} to {}:{}", run.user, run.group))?;
             std::fs::set_permissions(path, std::fs::Permissions::from_mode(run.mode))
                 .with_context(|| format!("give {path} the mode {:o}", run.mode))?;
             handed += 1;
         }
+    }
+    if !absent.is_empty() {
+        skyward_sys::kmsg(&format!("{} of the phone's own files are not there to hand over: {}", absent.len(), absent.join(" ")))?;
     }
     Ok(handed)
 }

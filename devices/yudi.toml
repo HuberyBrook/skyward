@@ -165,8 +165,8 @@ user = "root"
 groups = ["root"]
 
 [[service]]
-path = "/mnt/system/system_ext/bin/hwservicemanager"
-libraries = ["/mnt/system/system_ext/lib64", "/mnt/system/system/lib64"]
+path = "/mnt/system/system/bin/hwservicemanager"
+libraries = ["/mnt/system/system/lib64"]
 user = "root"
 groups = ["root"]
 
