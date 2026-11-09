@@ -158,33 +158,41 @@ groups = ["root", "system", "wakelock", "graphics"]
 # 注册与查找都走 servicemanager/hwservicemanager。
 # 顺序照 TWRP 的 init.recovery.qcom.rc：先服务目录，再 qseecom，最后密钥与凭证。
 # 路径都在手机自己的分区上（recovery 的 /system 是它自己的小 ramdisk）。
+# loader：手机的程序按手机自己的加载器构建（解释器写的是
+# /system/bin/bootstrap/linker64 或 /system/bin/linker64），recovery 的
+# /system 里前者没有、后者是旧版。prepare_loader() 把手机的引导加载器
+# 放到它该在的名字下；这里再写明由它代为启动，避免旧加载器配新库。
+# libraries 顺序即手工验证成功的顺序；vndk 目录由 skyward 自动追加。
 [[service]]
 path = "/mnt/system/system/bin/servicemanager"
-libraries = ["/mnt/system/system/lib64"]
+libraries = ["/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
 
 [[service]]
 path = "/mnt/system/system/bin/hwservicemanager"
-libraries = ["/mnt/system/system/lib64"]
+libraries = ["/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
 
 [[service]]
 path = "/vendor/bin/hw/vendor.qti.hardware.qseecom@1.0-service"
-libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+loader = "/system/bin/bootstrap/linker64"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
 
 [[service]]
 path = "/vendor/bin/hw/android.hardware.security.keymint-service-qti"
-libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+loader = "/system/bin/bootstrap/linker64"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
 
 [[service]]
 path = "/vendor/bin/hw/android.hardware.gatekeeper@1.0-service-qti"
-libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system_ext/lib64"]
+loader = "/system/bin/bootstrap/linker64"
+libraries = ["/vendor/lib64", "/mnt/system/system/lib64", "/mnt/system/system/lib64/bootstrap", "/apex/com.android.vndk.v32/lib64"]
 user = "root"
 groups = ["root"]
 

@@ -365,6 +365,13 @@ pub struct Service {
     /// Directories for LD_LIBRARY_PATH, searched in order.
     #[serde(default)]
     pub libraries: Vec<String>,
+    /// A loader the program is run through rather than by the one its own
+    /// header asks for. The installed system's programs are built for the
+    /// loader its runtime carries, which a recovery's /system does not have;
+    /// the recovery gives the programs that need it their loader's usual
+    /// name, and this names the one to run them through.
+    #[serde(default)]
+    pub loader: Option<String>,
     /// The program runs once, to its end, as a service of init's marked
     /// oneshot does: it is not started again, the programs after it start
     /// once it has ended, and it has to end well.

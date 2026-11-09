@@ -51,6 +51,10 @@ const EARLY_LOADER: &str = "/system/bin/bootstrap/linker64";
 const RUNTIME_BUNDLE: &str = "com.android.runtime";
 const BUNDLE_LOADER: &str = "bin/linker64";
 
+/// The loader the installed system's own bootstrap programs are loaded by,
+/// which is the same one the runtime bundle carries.
+const SYSTEM_LOADER: &str = "/mnt/system/system/bin/bootstrap/linker64";
+
 /// Which programs may register which hardware services, and where the
 /// directory for those services looks for that.
 const SERVICE_LABELS: &str = "/mnt/system/system/etc/selinux/plat_hwservice_contexts";
@@ -74,25 +78,25 @@ const DIRECTORY_OFF: &str = "hwservicemanager.disabled";
 /// as the framework's description of what it offers.
 const RECOVERY_MANIFEST: &str = "/system/etc/vintf/manifest.xml";
 
-/// What the directory for the phone's hardware services of the older kind
-/// needs before it will run inside a recovery. The program is the installed
-/// system's own: it is built to run before any partition is mounted, so it
-/// asks for a loader under a name a recovery does not carry; it decides what
-/// may register from labels a recovery does not carry either; and it reads
-/// the driver under a name that a recovery, which has the driver's own
-/// filesystem, does not have.
-///
-/// `wanted` names the hardware services that will be asked for.
-pub fn prepare_hardware_directory(wanted: &[String]) -> Result<()> {
-    // A loader and the lowest libraries are built together and agree
-    // between them on how a program's own storage is laid out, so the
-    // installed system's programs are loaded by the installed system's
-    // loader rather than by the older one a recovery carries.
+/// Give the installed system's own programs the loader they ask for.
+/// A loader and the lowest libraries are built together and agree between
+/// them on how a program's own storage is laid out, so the installed
+/// system's programs are loaded by the installed system's loader rather
+/// than by the older one a recovery carries. The bootstrap service
+/// directory asks for it under a name a recovery does not carry.
+pub fn prepare_loader() -> Result<()> {
     let loader = Path::new(EARLY_LOADER);
-    let from = bundle(RUNTIME_BUNDLE)?
-        .map(|at| at.join(BUNDLE_LOADER))
-        .filter(|p| p.is_file())
-        .with_context(|| format!("the installed system carries no {RUNTIME_BUNDLE}, which holds the loader its own programs ask for"))?;
+    if loader.is_file() {
+        return Ok(());
+    }
+    // The runtime bundle carries the loader the installed system boots with;
+    // where the bundle cannot be opened, the copy the system's own bootstrap
+    // programs are loaded by is the same loader.
+    let from = match bundle(RUNTIME_BUNDLE)?.map(|at| at.join(BUNDLE_LOADER)).filter(|p| p.is_file()) {
+        Some(from) => from,
+        None => Path::new(SYSTEM_LOADER).to_path_buf(),
+    };
+    ensure!(from.is_file(), "no loader at {} for the installed system's programs", from.display());
     let dir = loader.parent().expect("the loader is in a directory");
     fs::create_dir_all(dir).with_context(|| format!("make {}", dir.display()))?;
     // Made under the recovery's own umask the folder is root's alone, and
@@ -104,6 +108,20 @@ pub fn prepare_hardware_directory(wanted: &[String]) -> Result<()> {
         fs::remove_file(loader).with_context(|| format!("take away {}", loader.display()))?;
     }
     std::os::unix::fs::symlink(&from, loader).with_context(|| format!("point {} at {}", loader.display(), from.display()))?;
+    Ok(())
+}
+
+/// What the directory for the phone's hardware services of the older kind
+/// needs before it will run inside a recovery. The program is the installed
+/// system's own: it is built to run before any partition is mounted, so it
+/// asks for a loader under a name a recovery does not carry; it decides what
+/// may register from labels a recovery does not carry either; and it reads
+/// the driver under a name that a recovery, which has the driver's own
+/// filesystem, does not have.
+///
+/// `wanted` names the hardware services that will be asked for.
+pub fn prepare_hardware_directory(wanted: &[String]) -> Result<()> {
+    prepare_loader()?;
     let driver = Path::new(HARDWARE_DRIVER);
     if !driver.exists() {
         std::os::unix::fs::symlink(HARDWARE_DRIVER_NODE, driver)

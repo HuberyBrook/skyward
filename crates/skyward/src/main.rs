@@ -575,6 +575,10 @@ fn bring_up(cfg: &DeviceConfig, slot: skyward_vab::Slot) -> Result<()> {
         let described = secure::publish_descriptions(&registering, &files).context("publish the phone's service descriptions")?;
         skyward_sys::kmsg(&format!("{described} of the phone's own service descriptions published"))?;
     }
+    if !services.is_empty() {
+        secure::prepare_loader().context("give the installed system's programs their loader")?;
+        skyward_sys::kmsg("the installed system's programs have the loader they ask for")?;
+    }
     let libraries = secure::libraries().context("open the installed system's libraries")?;
     if let Some(dir) = &libraries {
         skyward_sys::kmsg(&format!("the phone's own libraries are at {}", dir.display()))?;

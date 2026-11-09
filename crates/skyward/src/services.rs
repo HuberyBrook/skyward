@@ -221,7 +221,16 @@ fn run(s: &Service, who: &Credentials) -> Result<String> {
 /// tree, reading and writing nothing of the recovery's, finding its
 /// libraries where it names them, and as `who`.
 fn command(s: &Service, who: &Credentials) -> Command {
-    let mut cmd = Command::new(&s.path);
+    // A program run through a loader is given its own path as the first
+    // word, as the loader's own usage has it.
+    let mut cmd = match &s.loader {
+        Some(loader) => {
+            let mut cmd = Command::new(loader);
+            cmd.arg(&s.path);
+            cmd
+        }
+        None => Command::new(&s.path),
+    };
     cmd.args(&s.args).current_dir("/").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     if !s.libraries.is_empty() {
         cmd.env("LD_LIBRARY_PATH", s.libraries.join(":"));
